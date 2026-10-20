@@ -1,6 +1,7 @@
 Build :: enum_flags u64 {
     shaderc;
     spirv_reflect;
+    jaison;
 }
 
 #run {
@@ -25,14 +26,18 @@ Build :: enum_flags u64 {
 
     if build & .shaderc {
         auto_release_temp();
-        if !buildShaderc()            then fatal("shaderc build has failed");
-        if !generateShadercBindings() then fatal("shaderc bindings generation has failed");
+        if !buildShaderc()    then fatal("shaderc build has failed");
+        if !generateShaderc() then fatal("shaderc generation has failed");
     }
 
     if build & .spirv_reflect {
         auto_release_temp();
-        if !buildSpirvReflect()            then fatal("SPIRV-Reflect build has failed");
-        if !generateSpirvReflectBindings() then fatal("SPIRV-Reflect bindings generation has failed");
+        if !buildSpirvReflect()    then fatal("SPIRV-Reflect build has failed");
+        if !generateSpirvReflect() then fatal("SPIRV-Reflect generation has failed");
+    }
+
+    if build & .jaison {
+        if !generateJaison() then fatal("jaison generation has failed");
     }
 }
 
@@ -72,8 +77,8 @@ buildShaderc :: () -> bool #compile_time {
     return true;
 }
 
-generateShadercBindings :: () -> bool #compile_time {
-    write_string("\n>>> shaderc bindings generation has started\n");
+generateShaderc :: () -> bool #compile_time {
+    write_string("\n>>> shaderc generation has started\n");
 
     delete_directory("output/shaderc");
     if !make_directory_if_it_does_not_exist("output/shaderc/bin", true) {
@@ -119,7 +124,7 @@ generateShadercBindings :: () -> bool #compile_time {
         return false;
     }
 
-    write_string(">>> shaderc bindings generation has ended\n");
+    write_string(">>> shaderc generation has ended\n");
     return true;
 }
 
@@ -153,8 +158,8 @@ buildSpirvReflect :: () -> bool #compile_time {
     return true;
 }
 
-generateSpirvReflectBindings :: () -> bool #compile_time {
-    write_string("\n>>> SPIRV-Reflect bindings generation has started\n");
+generateSpirvReflect :: () -> bool #compile_time {
+    write_string("\n>>> SPIRV-Reflect generation has started\n");
 
     delete_directory("output/spirv_reflect");
     if !make_directory_if_it_does_not_exist("output/spirv_reflect/bin", true) {
@@ -200,12 +205,12 @@ generateSpirvReflectBindings :: () -> bool #compile_time {
         return false;
     }
 
-    write_string(">>> SPIRV-Reflect bindings generation has ended\n");
+    write_string(">>> SPIRV-Reflect generation has ended\n");
     return true;
 }
 
 g_spirv_reflect_enum_flags : Table(string, *Enum);
-spirvReflectVisitor :: (decl: *Declaration, parent_decl: *Declaration) -> Declaration_Visit_Result {
+spirvReflectVisitor :: (decl: *Declaration, parent_decl: *Declaration) -> Declaration_Visit_Result #compile_time {
     if decl.kind == {
         case .ENUM;
             enum_decl := cast(*Enum) decl;
@@ -231,6 +236,44 @@ spirvReflectVisitor :: (decl: *Declaration, parent_decl: *Declaration) -> Declar
     }
 
     return .RECURSE;
+}
+
+//
+// jaison
+//
+
+generateJaison :: () -> bool #compile_time {
+    write_string("\n>>> jaison generation has started\n");
+
+    delete_directory("output/jaison");
+    if !make_directory_if_it_does_not_exist("output/jaison/unicode_utils", true) {
+        error("make_directory_if_it_does_not_exist(\"output/jaison/unicode_utils\") has failed\n");
+        return false;
+    }
+
+    if !copy_file("jaison/module.jai", "output/jaison/module.jai") {
+        error("copy_file(module.jai) has failed");
+        return false;
+    }
+    if !copy_file("jaison/generic.jai", "output/jaison/generic.jai") {
+        error("copy_file(generic.jai) has failed");
+        return false;
+    }
+    if !copy_file("jaison/typed.jai", "output/jaison/typed.jai") {
+        error("copy_file(typed.jai) has failed");
+        return false;
+    }
+    if !copy_file("jaison/LICENSE", "output/jaison/LICENSE") {
+        error("copy_file(LICENSE) has failed");
+        return false;
+    }
+    if !copy_file("jaison/unicode_utils/module.jai", "output/jaison/unicode_utils/module.jai") {
+        error("copy_file(unicode_utils/module.jai) has failed");
+        return false;
+    }
+
+    write_string(">>> jaison generation has ended\n");
+    return true;
 }
 
 //

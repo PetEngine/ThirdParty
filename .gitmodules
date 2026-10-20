@@ -6,3 +6,7 @@
 	path = spirv_reflect
 	url = https://github.com/KhronosGroup/SPIRV-Reflect
 	branch = main
+[submodule "jaison"]
+	path = jaison
+	url = https://github.com/rluba/jaison.git
+	branch = master
