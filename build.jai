@@ -166,6 +166,10 @@ generateSpirvReflectBindings :: () -> bool #compile_time {
         error("copy_file(spirv-reflect-static.lib) has failed");
         return false;
     }
+    if !copy_file("spirv_reflect/build/RelWithDebInfo/spirv-reflect-static.pdb", "output/spirv_reflect/bin/spirv-reflect-static.pdb") {
+        error("copy_file(spirv-reflect-static.pdb) has failed");
+        return false;
+    }
     if !copy_file("spirv_reflect/LICENSE", "output/spirv_reflect/LICENSE") {
         error("copy_file(LICENSE) has failed");
         return false;
