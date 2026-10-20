@@ -2,6 +2,7 @@ Build :: enum_flags u64 {
     shaderc;
     spirv_reflect;
     jaison;
+    nvtt;
 }
 
 #run {
@@ -38,6 +39,10 @@ Build :: enum_flags u64 {
 
     if build & .jaison {
         if !generateJaison() then fatal("jaison generation has failed");
+    }
+
+    if build & .nvtt {
+        if !generateNVTT() then fatal("NVTT generation has failed");
     }
 }
 
@@ -284,6 +289,84 @@ generateJaison :: () -> bool #compile_time {
 
     write_string(">>> jaison generation has ended\n");
     return true;
+}
+
+//
+// NVTT
+//
+
+generateNVTT :: () -> bool #compile_time {
+    write_string("\n>>> NVTT generation has started\n");
+
+    delete_directory("output/nvtt");
+    if !make_directory_if_it_does_not_exist("output/nvtt/bin", true) {
+        error("make_directory_if_it_does_not_exist(\"output/nvtt/bin\") has failed\n");
+        return false;
+    }
+
+    if !copy_file("nvtt/bin/nvtt30205.dll", "output/nvtt/bin/nvtt30205.dll") {
+        error("copy_file(nvtt30205.dll) has failed");
+        return false;
+    }
+    if !copy_file("nvtt/bin/nvtt30205.lib", "output/nvtt/bin/nvtt30205.lib") {
+        error("copy_file(nvtt30205.lib) has failed");
+        return false;
+    }
+    if !copy_file("nvtt/LICENSE.txt", "output/nvtt/LICENSE.txt") {
+        error("copy_file(LICENSE.txt) has failed");
+        return false;
+    }
+
+    options : Generate_Bindings_Options;
+    options.alias_original_enum_names = false;
+    options.visitor_with_data         = nvttVisitor;
+
+    array_add(*options.flatten_namespaces, "nvtt");
+
+    array_add(*options.extra_clang_arguments,
+              "-x", "c++",           // compile as C++
+              "-std=c++2c",          // use latest standard
+              "-D", "NVTT_SHARED=1");
+
+    array_add(*options.library_search_paths, "nvtt/bin");
+    array_add(*options.libraries,            .{ "nvtt30205", "nvtt" });
+
+    array_add(*options.include_paths, "nvtt");
+    array_add(*options.source_files,  "nvtt.h");
+
+    result_builder, success := generate_bindings(options, true);
+    if !success {
+        error("generate_bindings has failed\n");
+        return false;
+    }
+
+    append(*result_builder, "using,only(Msvc_Destructor_Flags) Windows :: #import \"Windows\";\n");
+
+    result := builder_to_string(*result_builder,, allocator = temp);
+    result  = replace(result, "nvtt/bin", "bin",, allocator = temp);
+
+    if !write_entire_file("output/nvtt/module.jai", result) {
+        error("write_entire_file has failed");
+        return false;
+    }
+
+    write_string(">>> NVTT generation has ended\n");
+    return true;
+}
+
+nvttVisitor :: (decl: *Declaration, parent_decl: *Declaration, user_data: *void) -> Declaration_Visit_Result #compile_time {
+    if decl.decl_flags & .DEPRECATED {
+        decl.decl_flags |= .OMIT_FROM_OUTPUT;
+        return .STOP;
+    }
+
+    if decl.kind == .ENUM && ends_with(decl.name, "Flags") {
+        enum_decl := cast(*Enum) decl;
+        enum_decl.flags |= .IS_ENUM_FLAGS | .VALUES_IN_HEX;
+        return .STOP;
+    }
+
+    return .RECURSE;
 }
 
 //
