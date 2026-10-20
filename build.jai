@@ -180,9 +180,13 @@ generateSpirvReflect :: () -> bool #compile_time {
         return false;
     }
 
+    enum_flags_declarations : Table(string, *Enum);
+    defer deinit(*enum_flags_declarations);
+
     options : Generate_Bindings_Options;
     options.alias_original_enum_names = false;
-    options.visitor = spirvReflectVisitor;
+    options.visitor_with_data         = spirvReflectVisitor;
+    options.visitor_data              = *enum_flags_declarations;
 
     array_add(*options.library_search_paths, "spirv_reflect/build/RelWithDebInfo");
     array_add(*options.libraries,            .{ "spirv-reflect-static", "spirv_reflect" });
@@ -191,7 +195,6 @@ generateSpirvReflect :: () -> bool #compile_time {
     array_add(*options.source_files,  "spirv_reflect.h");
 
     result_builder, success := generate_bindings(options, true);
-    defer deinit(*g_spirv_reflect_enum_flags);
     if !success {
         error("generate_bindings has failed\n");
         return false;
@@ -209,22 +212,28 @@ generateSpirvReflect :: () -> bool #compile_time {
     return true;
 }
 
-g_spirv_reflect_enum_flags : Table(string, *Enum);
-spirvReflectVisitor :: (decl: *Declaration, parent_decl: *Declaration) -> Declaration_Visit_Result #compile_time {
+spirvReflectVisitor :: (decl: *Declaration, parent_decl: *Declaration, user_data: *void) -> Declaration_Visit_Result #compile_time {
+    if decl.decl_flags & .DEPRECATED {
+        decl.decl_flags |= .OMIT_FROM_OUTPUT;
+        return .STOP;
+    }
+
+    enum_flags_declarations : *Table(string, *Enum) = user_data;
+
     if decl.kind == {
         case .ENUM;
-            enum_decl := cast(*Enum) decl;
-            if ends_with(enum_decl.name, "FlagBits") {
-                enum_decl.flags |= .IS_ENUM_FLAGS;
-                enum_decl.flags |= .VALUES_IN_HEX;
-                table_add(*g_spirv_reflect_enum_flags, enum_decl.name, enum_decl);
+            if ends_with(decl.name, "FlagBits") {
+                enum_decl := cast(*Enum) decl;
+                enum_decl.flags |= .IS_ENUM_FLAGS | .VALUES_IN_HEX;
+                table_add(enum_flags_declarations, decl.name, enum_decl);
             }
+            return .STOP;
 
         case .TYPEDEF;
             if ends_with(decl.name, "Flags") {
                 flag_bits_name := replace(decl.name, "Flags", "FlagBits",, allocator = temp);
 
-                found, enum_decl := table_find(*g_spirv_reflect_enum_flags, flag_bits_name);
+                found, enum_decl := table_find(enum_flags_declarations, flag_bits_name);
                 if found {
                     assert(enum_decl != null);
 
@@ -233,6 +242,7 @@ spirvReflectVisitor :: (decl: *Declaration, parent_decl: *Declaration) -> Declar
                     decl.type.size         = enum_decl.type.size;
                 }
             }
+            return .STOP;
     }
 
     return .RECURSE;
